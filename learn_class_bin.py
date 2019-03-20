@@ -70,6 +70,30 @@ def create_variables(depth):
             var_obj.append(0.01)
             var_value = var_value + 1
 
+    #
+
+    C = 0.005 # the regularization term - New Constraint
+    # New Constraint
+    for l in range(num_leafs):
+        VARS["alpha_" + str(l)] = var_value
+        var_names.append("#" + str(var_value))
+        var_types = var_types + "B"
+        var_lb.append(0)
+        var_ub.append(1)
+        var_obj.append(C)
+        var_value = var_value + 1
+
+    # New Constraint
+    for n in range(num_nodes):
+        VARS["alpha_" + str(n)] = var_value
+        var_names.append("#" + str(var_value))
+        var_types = var_types + "B"
+        var_lb.append(0)
+        var_ub.append(1)
+        var_obj.append(C)
+        var_value = var_value + 1
+
+
     # leaf l predicts type s, boolean
     for s in range(get_num_targets()):
         for l in range(num_leafs):
@@ -155,6 +179,19 @@ def create_variables(depth):
                 var_ub.append(1)
                 var_obj.append(0)
                 var_value = var_value + 1
+
+            # New constraint
+            for n in range(num_nodes):
+                VARS["node_" + str(d) + "_" + str(n)] = var_value
+                var_names.append("#" + str(var_value))
+                if not bool_decision:
+                    var_types = var_types + "C"
+                else:
+                    var_types = var_types + "B"
+                var_lb.append(0)
+                var_ub.append(1)
+                var_obj.append(0)
+                var_value = var_value + 1
     
         for d in range(data_size):
             for l in range(num_leafs):
@@ -227,6 +264,7 @@ def create_variables(depth):
             var_obj.append(1)
             var_value = var_value + 1
 
+    print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~var_names, var_types, var_lb, var_ub, var_obj")
     return var_names, var_types, var_lb, var_ub, var_obj
 
 BIN_MAP = dict()
@@ -266,6 +304,8 @@ def create_score_binbin_rows(depth, row_value):
     
     num_leafs = 2**depth
     num_nodes = num_leafs-1
+
+    print("!!!!!!!!!!!!!here!!!!!!!!!!!!")
     
     for d in range(data_size):
         col_names = [VARS["score_" + str(d) + "_" + str(l)] for l in range(num_leafs)]
@@ -277,7 +317,9 @@ def create_score_binbin_rows(depth, row_value):
         row_senses = row_senses + "L"
         row_value = row_value + 1
 
+    print("=======num_nodes", num_nodes)
     for n in range(num_nodes):
+        print("FIXED_NODES", FIXED_NODES)
         if n in FIXED_NODES:
             f = FIXED_NODES[n][0]
             v = FIXED_NODES[n][1]
@@ -297,8 +339,15 @@ def create_score_binbin_rows(depth, row_value):
                 row_right_sides.append(0)
                 row_senses = row_senses + "L"
                 row_value = row_value + 1
-        
+
             continue
+
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print("row_names", row_names)
+        print("row_values", row_values)
+        print("row_right_sides", row_right_sides)
+        print("row_senses", row_senses)
+        print("row_value", row_value)
     
         for f in range(num_features):
             lower_leafs = get_right_leafs(n, num_nodes)
@@ -482,10 +531,46 @@ def create_error_binbin_rows(depth, row_value):
     
     num_leafs = 2**depth
     num_nodes = num_leafs-1
-    
+
+
+    # New Constraint
+    for l in range(num_leafs):
+        col_names = [VARS["leaf_" + str(d) + "_" + str(l)] for d in range(data_size)]
+        col_names = col_names+[VARS["alpha_" + str(l)]]
+
+        col_values = [1 for d in range(data_size)]
+        col_values = col_values+[-1*data_size]
+
+        row_names.append("#" + str(row_value))
+        row_values.append([col_names, col_values])
+        row_right_sides.append(0)
+        row_senses = row_senses + "L"
+        row_value = row_value + 1
+
+    # New Constraint
+    for n in range(num_nodes):
+        left_leafs = get_left_leafs(n, num_nodes)
+        right_leafs = get_right_leafs(n, num_nodes)
+
+        col_names = [VARS["leaf_" + str(d) + "_" + str(l)] for d in range(data_size) for l in left_leafs]
+        col_names = col_names + [VARS["leaf_" + str(d) + "_" + str(l)] for d in range(data_size) for l in right_leafs]
+        col_names = col_names + [VARS["alpha_" + str(n)]]
+
+        col_values = [1 for d in range(data_size) for l in left_leafs]
+        col_values = col_values + [1 for d in range(data_size) for l in right_leafs]
+        col_values = col_values + [-1 * data_size]
+
+        row_names.append("#" + str(row_value))
+        row_values.append([col_names, col_values])
+        row_right_sides.append(0)
+        row_senses = row_senses + "L"
+        row_value = row_value + 1
+
     for d in range(data_size):
         col_names = [VARS["leaf_" + str(d) + "_" + str(l)] for l in range(num_leafs)]
+        col_names = col_names + [VARS["node_" + str(d) + "_" + str(n)] for n in range(num_nodes)]  # New constraint
         col_values = [1 for l in range(num_leafs)]
+        col_values = col_values + [1 for d in range(num_nodes)]  # New constraint
 
         row_names.append("#" + str(row_value))
         row_values.append([col_names,col_values])
@@ -671,6 +756,13 @@ def create_error_binbin_rows(depth, row_value):
             row_right_sides.append(max_val)
             row_senses = row_senses + "L"
             row_value = row_value + 1
+
+        print("error_binbin!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        #print("row_names", row_names)
+        #print("row_values", row_values)
+        #print("row_right_sides", row_right_sides)
+        #print("row_senses", row_senses)
+        #print("row_value", row_value)
 
     return row_names, row_values, row_right_sides, row_senses, row_value
 
@@ -1511,6 +1603,9 @@ def create_rows(depth):
         row_value = nrow_value
 
     if not use_score:
+
+        print("~~~~~~~~~~~~~~~~~~~~~~not use_score~~~~~~~~~~~~~~~~~~~~")
+
         nrow_names, nrow_values, nrow_right_sides, nrow_senses, nrow_value = create_error_binbin_rows(depth, row_value)
         row_names.extend(nrow_names)
         row_values.extend(nrow_values)
@@ -1968,16 +2063,31 @@ def lpdtree(depth):
     num_leafs = 2**depth
     num_nodes = num_leafs-1
 
+
+    print("<<<<<<<<<<<<<<<<<<<<<<<")
     try:
+
         prob.objective.set_sense(prob.objective.sense.minimize)
 
         var_names, var_types, var_lb, var_ub, var_obj = create_variables(depth)
 
-        print("num_vars", len(var_names))
+        #print("num_vars", len(var_names))
 
+        #print("var_names", var_names)
+        #print("var_types", var_types)
+        #print("var_lb", var_lb)
+        #print("var_ub", var_ub)
+        #print("var_obj", var_obj)
+        print("<<<<<<<<<<<<<<<<<<<<<<<2")
         prob.variables.add(obj = var_obj, lb = var_lb, ub = var_ub, types = var_types)#, names = var_names)
-
+        print("<<<<<<<<<<<<<<<<<<<<<<<3")
         row_names, row_values, row_right_sides, row_senses = create_rows(depth)
+        print("<<<<<<<<<<<<<<<<<<<<<<<4")
+        print(">>>>>>>>>row_names", row_names)
+        # print("row_values", row_values)
+        # print("row_right_sides", row_right_sides)
+        # print("row_senses", row_senses)
+        # print("row_value", row_value)
 
         print("num_rows", len(row_names))
 
@@ -2384,19 +2494,21 @@ def main(argv):
    print("sum:")
    print(sum)
 
-   return;
+   print(dir())
+   #return;
 
    if forest_bounds > 0:
       clear_constants()
       add_constants_from_forest(forest_bounds, inputdepth)
 
-   add_constants_from_tree(inputdepth)
+   add_constants_from_tree(inputdepth) #warm start from cart?
 
    solution_values = []
    if count_max != -1:
       solution_values = lpdtree_iter(maxi_depth, inputdepth, count_max, inputfile)
    else:
-      solution_values = lpdtree(inputdepth)
+       print(">>>>>>>>>>>>>lpdtree")
+       solution_values = lpdtree(inputdepth)
 
    num_features = get_num_features()
    num_leafs = 2**inputdepth
